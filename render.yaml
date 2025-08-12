@@ -1,37 +1,17 @@
 services:
   - type: web
-    name: hurricane-resource
+    name: hurricane-tracker
     env: python
     plan: free
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
-      python manage.py migrate
-    startCommand: gunicorn hurricane_project.wsgi
+    startCommand: |
+      python manage.py migrate --noinput && \
+      (python import_shelters.py || true) && \
+      gunicorn hurricane_project.wsgi:application --workers 2 --threads 4 --timeout 120
     envVars:
-      - key: SECRET_KEY
+      - key: DJANGO_SECRET_KEY
         generateValue: true
-      - key: DEBUG
+      - key: DJANGO_DEBUG
         value: "False"
-      - key: STORM_DATA_DIR
-        value: "/data/storms"
-    disk:
-      name: storm-data
-      mountPath: /data
-      sizeGB: 1
-
-  - type: cron
-    name: storm-fetch
-    env: python
-    schedule: "*/30 * * * *"
-    plan: free
-    buildCommand: |
-      pip install -r requirements.txt
-    startCommand: python download_storms.py
-    envVars:
-      - key: STORM_DATA_DIR
-        value: "/data/storms"
-    disk:
-      name: storm-data
-      mountPath: /data
-      sizeGB: 1
