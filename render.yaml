@@ -3,15 +3,22 @@ services:
     name: hurricane-tracker
     env: python
     plan: free
+    region: oregon
     buildCommand: |
+      pip install --upgrade pip
       pip install -r requirements.txt
-      python manage.py collectstatic --noinput
-    startCommand: |
-      python manage.py migrate --noinput && \
-      (python import_shelters.py || true) && \
-      gunicorn hurricane_project.wsgi:application --workers 2 --threads 4 --timeout 120
+      python3 manage.py collectstatic --noinput
+      python3 manage.py migrate
+      python3 import_shelters.py
+    startCommand: gunicorn hurricane_project.wsgi:application
     envVars:
-      - key: DJANGO_SECRET_KEY
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      - key: SECRET_KEY
         generateValue: true
-      - key: DJANGO_DEBUG
-        value: "False"
+      - key: DEBUG
+        value: false
+      - key: ALLOWED_HOSTS
+        value: "hurricane-tracker.onrender.com,localhost,127.0.0.1"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://hurricane-tracker.onrender.com"
