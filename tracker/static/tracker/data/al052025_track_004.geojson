@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "al052025_track_004",
+"features": [
+{ "type": "Feature", "properties": { "STORMNAME": "Erin", "STORMTYPE": "TS", "ADVDATE": "500 AM AST Tue Aug 12 2025", "ADVISNUM": "4", "STORMNUM": 5.0, "FCSTPRD": 120.0, "BASIN": "AL" }, "geometry": { "type": "LineString", "coordinates": [ [ -34.3, 17.4 ], [ -37.2, 17.2 ], [ -40.5, 17.0 ], [ -43.6, 17.0 ], [ -46.8, 17.4 ], [ -49.9, 18.0 ], [ -52.7, 18.7 ], [ -58.0, 20.0 ], [ -62.5, 21.5 ] ] } }
+]
+}

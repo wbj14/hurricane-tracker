@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Florida Hurricane Shelter Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #b4ddf5;
+      --card: #ffffff;
+      --text: #474849;
+      --muted: #6b7280;
+      --primary: #669ced;
+      --primary-600: #0957cc;
+      --ring: rgba(11,108,255,.35);
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 24px auto 48px;
+      padding: 0 16px;
+    }
+    nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    nav button {
+      padding: 10px 14px;
+      font-size: 15px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      transition: transform .05s ease, background .2s ease, color .2s ease, border-color .2s ease;
+    }
+    nav button:hover { transform: translateY(-1px); }
+    nav button.active {
+      background: var(--primary);
+      color: #000000;
+      border-color: var(--primary);
+    }
+    h1 { font-size: 2rem; margin: 8px 0 14px; }
+    p { margin: 8px 0; }
+
+    /* Controls */
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(10, 11, 9, 0.05);
+    }
+    input[type="text"], select, button {
+      padding: 10px 12px;
+      font-size: 15px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: #ffffff;
+      outline: none;
+    }
+    input[type="text"]:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+    .btn {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--primary-600); }
+    .btn-secondary {
+      background: #eef2ff;
+      color: #0773bb;
+      border: 1px solid #e0e7ff;
+    }
+
+    /* Map cards */
+    .map-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 2px 10px rgba(16,24,40,.06);
+    }
+    #map, #radar-map {
+      height: 520px;
+      width: 100%;
+      border-radius: 10px;
+      box-shadow: inset 0 0 0 1px #0001;
+    }
+
+    /* Footer resources */
+    footer.resources {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 18px;
+      box-shadow: 0 1px 4px rgba(16,24,40,.06);
+    }
+    footer.resources h3 { margin: 0 0 8px; }
+    footer.resources ul { list-style: disc; padding-left: 20px; margin: 0; }
+    footer.resources a { color: var(--primary-600); text-decoration: none; }
+    footer.resources a:hover { text-decoration: underline; }
+
+    /* Status / messages */
+    #no-results, #radar-no-results {
+      color: #b91c1c;
+      margin: 8px 0 0;
+    }
+    .muted { color: var(--muted); font-size: 0.95rem; }
+
+    /* Loading spinner */
+    .spinner {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--muted);
+      margin: 6px 0 8px;
+    }
+    .spinner::before {
+      content: "";
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #c7d2fe;
+      border-top-color: #4f46e5;
+      animation: spin 0.9s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      #map, #radar-map { height: 420px; }
+      nav { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <button id="tab-shelter" class="active" onclick="showTab('shelter-tab')">Shelter Map</button>
+      <button id="tab-radar" onclick="showTab('radar-tab')">Hurricane Tracker</button>
+    </nav>
+
+    <!-- ===== Shelter Tab ===== -->
+    <div id="shelter-tab">
+      <h1>Florida Hurricane Shelter Map</h1>
+
+      <div id="controls">
+        <input type="text" id="search-input" placeholder="Enter ZIP code, city, or county" style="width: 280px;" />
+        <button class="btn" onclick="filterShelters()">Search</button>
+        <button class="btn-secondary" onclick="resetMap()">Reset</button>
+
+        <label for="pet-filter-select" class="muted" style="margin-left: 6px;">Pet Friendly:</label>
+        <select id="pet-filter-select" aria-label="Pet-friendly filter">
+          <option value="all">Show all shelters</option>
+          <option value="yes">Only pet-friendly shelters</option>
+          <option value="no">Hide pet-friendly shelters</option>
+        </select>
+      </div>
+
+      <div class="spinner" id="shelter-spinner">Searching…</div>
+      <p id="no-results" style="display:none;"></p>
+      <p class="muted" id="shelter-updated" aria-live="polite"></p>
+
+      <div class="map-card">
+        <div id="map"></div>
+      </div>
+
+      <footer class="resources">
+        <h3>Resources:</h3>
+        <ul>
+          <li><a href="https://geodata.dep.state.fl.us/datasets/FDEP::risk-shelter-inventory/explore?showTable=true" target="_blank" rel="noopener noreferrer">Florida DEP Shelter Inventory</a></li>
+          <li><a href="https://www.floridadisaster.org/planprepare/shelters/" target="_blank" rel="noopener noreferrer">FloridaDisaster.org Shelter Inventory</a></li>
+          <li><a href="https://www.floridadisaster.org/knowyourzone" target="_blank" rel="noopener noreferrer">FloridaDisaster.org Evacuation Zone Map</a></li>
+          <li><a href="https://www.stateofflorida.com/articles/hurricane-preparedness-guide/" target="_blank" rel="noopener noreferrer">Hurricane Preparedness Guide</a></li>
+          <li><a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA Hurricane Center</a></li>
+        </ul>
+      </footer>
+    </div>
+
+    <div id="radar-tab" style="display:none;">
+      <h1>Hurricane Radar</h1>
+
+      <div id="radar-controls" class="map-card" style="padding:12px; margin-bottom:12px;">
+        <input type="text" id="radar-search-input" placeholder="Enter ZIP code, city, or county" style="width: 280px;" />
+        <button class="btn" onclick="searchRadarLocation()">Search</button>
+        <button class="btn-secondary" onclick="resetRadarMap()">Reset</button>
+        <button id="refresh-storms-btn" type="button" class="btn-secondary" onclick="manualRefreshStorms()">Refresh Storms</button>
+        <div class="spinner" id="radar-spinner">Searching…</div>
+        <p id="radar-no-results" style="color:#b91c1c; display:none;"></p>
+      </div>
+
+      <div class="map-card">
+        <div id="radar-map"></div>
+      </div>
+
+      <!-- Legend -->
+      <div id="storm-legend" class="map-card" style="display:inline-block; margin-top:12px; padding:8px 10px;">
+        <div style="margin-bottom:4px;">
+          <span style="display:inline-block;width:16px;height:3px;background:#1b9e77;margin-right:6px;vertical-align:middle;"></span>
+          Track
+        </div>
+        <div style="margin-bottom:4px;">
+          <span style="display:inline-block;width:16px;height:16px;background:#d95f02;opacity:.2;border:1px solid #d95f02;margin-right:6px;vertical-align:middle;"></span>
+          Cone
+        </div>
+      </div>
+
+      <p id="no-storms-message" class="muted" style="margin-top:10px; display:none;">
+        No active hurricanes or tropical storms currently.
+      </p>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+
+  <script>
+    function showTab(tabId) {
+      document.getElementById('shelter-tab').style.display = (tabId === 'shelter-tab') ? 'block' : 'none';
+      document.getElementById('radar-tab').style.display   = (tabId === 'radar-tab') ? 'block' : 'none';
+      document.getElementById('tab-shelter').classList.toggle('active', tabId === 'shelter-tab');
+      document.getElementById('tab-radar').classList.toggle('active', tabId === 'radar-tab');
+
+      if (tabId === 'radar-tab' && !window.radarMapInitialized) {
+        initRadarMap();
+        window.radarMapInitialized = true;
+      }
+      if (tabId === 'radar-tab' && window.radarMapInstance) {
+        setTimeout(() => window.radarMapInstance.invalidateSize(), 150);
+      }
+    }
+
+    // Shelter Map
+    const map = L.map('map', {
+      maxBounds: [[24.396308, -87.634938],[31.000888, -79.974307]],
+      maxBoundsViscosity: 1.0
+    }).setView([27.6648, -81.5158], 6);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let allShelters = [];
+    let markers = [];
+
+    // Load shelters
+    fetch('/api/shelters')
+      .then(res => res.json())
+      .then(data => {
+        allShelters = data;
+        renderShelters(allShelters);
+        setUpdatedNow(); // initial timestamp
+      });
+
+    function setUpdatedNow() {
+      const el = document.getElementById('shelter-updated');
+      if (!el) return;
+      const d = new Date();
+      el.textContent = `Last updated: ${d.toLocaleString()}`;
+    }
+
+    function applyPetFilter(list) {
+      const petFilter = document.getElementById('pet-filter-select').value;
+      if (petFilter === "yes") return list.filter(s => s.is_pet_friendly);
+      if (petFilter === "no")  return list.filter(s => !s.is_pet_friendly);
+      return list;
+    }
+
+    // Pet filter 
+    document.getElementById('pet-filter-select').addEventListener('change', () => {
+      const q = document.getElementById('search-input')?.value.trim();
+      if (q && q.length >= 3) {
+        filterShelters();
+      } else {
+        renderShelters(applyPetFilter(allShelters.slice()));
+      }
+    });
+
+    // Enter
+    document.getElementById('search-input').addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        filterShelters();
+      }
+    });
+    document.getElementById('controls').addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        document.querySelector('#controls .btn')?.click();
+      }
+    });
+
+
+    async function geocodeFlorida(query, wantCounty = false) {
+        // Florida
+        const viewbox = '-87.634938,31.000888,-79.974307,24.396308';
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=us&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+
+        const r = await fetch(url);
+        const results = await r.json();
+
+        // Prefer results inside Florida
+        let fl = results.filter(x =>
+            x?.address?.state?.toLowerCase() === 'florida' ||
+            /,\s*florida\b/i.test(x?.display_name || '')
+        );
+
+        // If user typed "county", bias to county/administrative boundaries
+        if (wantCounty) {
+            const looksCounty = x =>
+            (x?.class === 'boundary' && x?.type === 'administrative') ||
+            /county/i.test(x?.display_name || '') ||
+            /county/i.test(x?.address?.county || '');
+            const countyHits = fl.filter(looksCounty);
+            if (countyHits.length) fl = countyHits;
+        }
+
+        // Fallback: retry forcibly with ", Florida" if nothing found
+        if (!fl.length && !/florida/i.test(query)) {
+            return geocodeFlorida(query + ', Florida', wantCounty);
+        }
+
+        return fl[0] || results[0] || null;
+    }
+
+    // City/ZIP/County
+    async function filterShelters() {
+        const spinner = document.getElementById('shelter-spinner');
+        const qEl = document.getElementById('search-input');
+        const message = document.getElementById('no-results');
+        const query = qEl.value.trim();
+
+        message.style.display = 'none';
+
+        if (!query || query.length < 3) {
+            message.textContent = "Please enter a valid city, ZIP code, or county.";
+            message.style.display = 'block';
+            return;
+        }
+
+        try {
+            spinner.style.display = 'inline-flex';
+
+            // Prefer county admin boundaries if user typed "... county"
+            const wantCounty = /\bcounty\b/i.test(query);
+            const hit = await geocodeFlorida(query, wantCounty);
+
+            if (!hit) {
+            message.textContent = "No results found in Florida.";
+            message.style.display = 'block';
+            return;
+            }
+
+            const lat = parseFloat(hit.lat);
+            const lon = parseFloat(hit.lon);
+            const zoomLevel = /^\d{5}$/.test(query) ? 13 : 10;
+            map.setView([lat, lon], zoomLevel);
+
+            // 50 km radius filter around the geocoded point
+            let nearby = allShelters.filter(s => {
+            const dLat = (s.latitude - lat) * Math.PI / 180;
+            const dLon = (s.longitude - lon) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 +
+                        Math.cos(lat * Math.PI / 180) * Math.cos(s.latitude * Math.PI / 180) *
+                        Math.sin(dLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distanceKm = 6371 * c;
+            return distanceKm <= 50;
+            });
+
+            nearby = applyPetFilter(nearby);
+
+            if (nearby.length === 0) {
+            message.textContent = "No shelters found nearby.";
+            message.style.display = 'block';
+            } else {
+            renderShelters(nearby);
+            setUpdatedNow?.();
+            }
+        } catch (e) {
+            message.textContent = "Error searching location.";
+            message.style.display = 'block';
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+
+
+    function resetMap() {
+        // 1) Clear UI
+        const searchEl = document.getElementById('search-input');
+        if (searchEl) searchEl.value = '';
+
+        const msg = document.getElementById('no-results');
+        if (msg) msg.style.display = 'none';
+
+        const petSel = document.getElementById('pet-filter-select');
+        if (petSel) petSel.value = 'all';
+
+        // 2) Clear markers
+        if (Array.isArray(markers) && markers.length) {
+            for (const m of markers) {
+            try { map.removeLayer(m); } catch {}
+            }
+            markers = [];
+        }
+
+        // 3) Reset view
+        if (map) map.setView([27.6648, -81.5158], 6);
+
+        // 4) Re-render all
+        if (Array.isArray(allShelters) && allShelters.length) {
+            renderShelters(allShelters.slice());
+        }
+        // optional: update timestamp if you show one
+        if (typeof setUpdatedNow === 'function') setUpdatedNow();
+        }
+
+        // IMPORTANT: expose for inline onclick
+        window.resetMap = resetMap;
+
+
+
+    function renderShelters(shelters) {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+
+      shelters.forEach(s => {
+        if (s.latitude && s.longitude) {
+          const marker = L.marker([s.latitude, s.longitude])
+            .addTo(map)
+            .bindPopup(`
+              <strong>${s.name}</strong><br>
+              ${s.address}<br>
+              ${s.city}, ${s.county} ${s.zip_code}<br>
+              Pet Friendly: ${s.is_pet_friendly ? "Yes" : "No"}<br>
+              <a href="https://geodata.dep.state.fl.us/datasets/FDEP::risk-shelter-inventory/explore?showTable=true" target="_blank" rel="noopener">More Info</a>
+            `);
+          markers.push(marker);
+        }
+      });
+    }
+
+
+
+
+
+    // Radar Map
+    let stormLayers = null;
+    let stormsTimer = null;
+    let loadStormsAbort = null;
+
+    function initRadarMap() {
+      if (!window.L) return;
+
+      const radarMap = L.map('radar-map', { zoomControl: true }).setView([27.5, -82], 6);
+      window.radarMapInstance = radarMap;
+
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(radarMap);
+
+      const noaaRadar = L.tileLayer.wms('https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?', {
+        layers: 'conus_bref_qcd', format: 'image/png', transparent: true, attribution: 'NOAA/NWS', opacity: 0.6
+      }).addTo(radarMap);
+
+      const layersControl = L.control.layers({ 'OpenStreetMap': osm }, { 'NOAA Radar': noaaRadar }, { collapsed: true }).addTo(radarMap);
+
+      stormLayers = L.layerGroup().addTo(radarMap);
+      layersControl.addOverlay(stormLayers, 'Active Storms');
+
+      loadStorms();
+      if (stormsTimer) clearInterval(stormsTimer);
+      stormsTimer = setInterval(loadStorms, 15 * 60 * 1000);
+
+      wireRefreshButton();
+    }
+
+    function manualRefreshStorms() {
+      if (!window.radarMapInitialized || !window.radarMapInstance) {
+        initRadarMap();
+        window.radarMapInitialized = true;
+      }
+      loadStorms(true);
+    }
+
+    function wireRefreshButton() {
+      const btn = document.getElementById('refresh-storms-btn');
+      if (!btn || btn.__wired) return;
+      btn.addEventListener('click', manualRefreshStorms);
+      btn.__wired = true;
+    }
+
+    async function loadStorms(fromButton = false) {
+      const noMsg = document.getElementById('no-storms-message');
+      const btn = document.getElementById('refresh-storms-btn');
+      try { loadStormsAbort?.abort(); } catch(e) {}
+      loadStormsAbort = new AbortController();
+
+      const restoreBtn = () => { if (btn) { btn.disabled = false; btn.textContent = 'Refresh Storms'; } };
+      if (fromButton && btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+
+      function preprocess(features) {
+        const num = v => { const n = Number((v ?? "").toString().replace(/[^\d.]/g,"")); return Number.isFinite(n) ? n : null; };
+        const latest = new Map();
+        for (const f of features) {
+          const p = f.properties || {};
+          const key = (p.stormId || p.STORMNAME || p.stormName || p.name || "").toString().toLowerCase();
+          const adv = num(p.ADVISNUM || p.advisory || p.advisoryNumber);
+          if (!key) continue;
+          if (adv != null && (!latest.has(key) || adv > latest.get(key))) latest.set(key, adv);
+        }
+        let filtered = features.filter(f => {
+          const p = f.properties || {};
+          const key = (p.stormId || p.STORMNAME || p.stormName || p.name || "").toString().toLowerCase();
+          const maxAdv = latest.get(key);
+          const adv = num(p.ADVISNUM || p.advisory || p.advisoryNumber);
+          return (maxAdv == null || adv == null) ? true : adv === maxAdv;
+        });
+        const seen = new Set();
+        const round = x => Math.round(Number(x) * 1000) / 1000;
+        filtered = filtered.filter(f => {
+          const g = f.geometry || {};
+          if (g.type !== "Point") return true;
+          const p = f.properties || {};
+          const key = (p.stormId || p.STORMNAME || p.stormName || p.name || "").toString().toLowerCase();
+          const c = Array.isArray(g.coordinates) ? g.coordinates : [];
+          if (c.length < 2) return true;
+          const k = `${key}|${round(c[0])},${round(c[1])}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        return filtered;
+      }
+
+      try {
+        const res = await fetch('/api/storms.geojson?ts=' + Date.now(), {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+          signal: loadStormsAbort.signal
+        });
+        if (!res.ok) throw new Error('Storms endpoint error: ' + res.status);
+        const data = await res.json();
+
+        if (!stormLayers) return;
+        stormLayers.clearLayers();
+
+        const rawFeatures = Array.isArray(data?.features) ? data.features : [];
+        const features = preprocess(rawFeatures);
+
+        if (!features.length) {
+          if (noMsg) noMsg.style.display = 'block';
+          restoreBtn();
+          return;
+        }
+
+        const gj = L.geoJSON(
+          { type: 'FeatureCollection', features },
+          {
+            style: (feature) => {
+              const p = feature.properties || {};
+              const kind = (p.layer || p.type || p.category || "").toString().toLowerCase();
+              const geom = feature.geometry?.type;
+              if (geom === 'Polygon' || geom === 'MultiPolygon' || kind.includes('cone') || kind.includes('forecast')) {
+                return { color: '#FF7421', weight: 1, fillOpacity: 0.2 };
+              }
+              if (geom === 'LineString' || geom === 'MultiLineString' || kind.includes('track')) {
+                return { color: '#CF0404', weight: 3 };
+              }
+              return { color: '#C95006', weight: 2 };
+            },
+            pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 4, weight: 1, opacity: 1, fillOpacity: 0.9 }),
+            onEachFeature: (feature, layer) => {
+              const p = feature.properties || {};
+              const name = p.STORMNAME || p.stormName || p.name || p.storm || 'Storm';
+              const status = p.status || classifyStatus(p);
+              const title = p.title || (status ? `${status} ${name}` : name);
+              const adv  = p.ADVISNUM || p.advisory || p.advisoryNumber || "";
+              const time = p.ADVDATE || p.dateTime || p.validTime || p.issueTime || "";
+              const basin = p.basin || "";
+              layer.bindPopup(
+                `<strong>${title}</strong>` +
+                `${adv ? `<br>Advisory ${adv}` : ""}` +
+                `${time ? `<br>${time}` : ""}` +
+                `${basin ? `<br>(${basin})` : ""}`
+              );
+            }
+          }
+        ).addTo(stormLayers);
+
+        try { gj.bringToFront(); } catch (_) {}
+        if (noMsg) noMsg.style.display = 'none';
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.warn('Failed to load storms:', err);
+          if (noMsg) noMsg.style.display = 'block';
+        }
+      } finally {
+        const btn = document.getElementById('refresh-storms-btn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh Storms'; }
+      }
+    }
+
+    function classifyStatus(p = {}) {
+      for (const k of ["status","stormType","type","CLASS","Class","system","SYSTEM"]) {
+        const v = (p[k] ?? "").toString().trim();
+        if (v) return v;
+      }
+      const code = ((p.INTENSITY ?? p.TCtype) ?? "").toString().toUpperCase().trim();
+      const codeMap = { TD:"Tropical Depression", TS:"Tropical Storm", HU:"Hurricane", SS:"Subtropical Storm", SD:"Subtropical Depression", EX:"Extratropical", PT:"Post-Tropical", LO:"Low", DB:"Disturbance" };
+      if (codeMap[code]) {
+        if (code === "HU") {
+          const cat = p.SS ?? p.SAFFIR_SIMPSON ?? p.Category ?? p.category;
+          if (cat) return `Hurricane Cat ${cat}`;
+        }
+        return codeMap[code];
+      }
+      const windKeys = ["MAX_WIND_MPH","MAX_WIND","Vmax","V_MAX","VMAX","MAX_WIND_KTS","WND_MPH","WND_KTS"];
+      let mph = null;
+      for (const k of windKeys) {
+        const raw = p[k];
+        if (raw != null && raw !== "" && raw !== "NA" && !Number.isNaN(Number(raw))) {
+          const n = Number(raw);
+          mph = (k.includes("KTS") || (k.toUpperCase().includes("VMAX") && n < 120)) ? n * 1.15078 : n;
+          break;
+        }
+      }
+      if (mph != null) {
+        if (mph < 39) return "Tropical Depression";
+        if (mph < 74) return "Tropical Storm";
+        const c = mph >= 157 ? 5 : mph >= 130 ? 4 : mph >= 111 ? 3 : mph >= 96 ? 2 : 1;
+        return `Hurricane Cat ${c}`;
+      }
+      return "";
+    }
+
+    // Radar Enter-to-search + Florida county scope
+    document.getElementById("radar-search-input").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchRadarLocation();
+      }
+    });
+
+    async function searchRadarLocation() {
+      const spinner = document.getElementById('radar-spinner');
+      const message = document.getElementById('radar-no-results');
+      let query = document.getElementById('radar-search-input').value.trim();
+      message.style.display = 'none';
+
+      if (!query || query.length < 3) {
+        message.textContent = 'Please enter a valid location.';
+        message.style.display = 'block';
+        return;
+      }
+
+      // Keep within Florida where possible
+      if (!/florida/i.test(query)) query += ', Florida';
+
+      try {
+        spinner.style.display = 'inline-flex';
+        const geocodeURL = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=1`;
+        const res = await fetch(geocodeURL);
+        const geoData = await res.json();
+
+        if (!geoData || geoData.length === 0 || !/florida/i.test(geoData[0].display_name)) {
+          message.textContent = 'No results found in Florida.';
+          message.style.display = 'block';
+          return;
+        }
+
+        const lat = parseFloat(geoData[0].lat);
+        const lon = parseFloat(geoData[0].lon);
+        const zoomLevel = /^\d{5}$/.test(query) ? 13 : 10;
+        if (window.radarMapInstance) window.radarMapInstance.setView([lat, lon], zoomLevel);
+      } catch {
+        message.textContent = 'Error searching location.';
+        message.style.display = 'block';
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    function resetRadarMap() {
+        // Ensure map exists; if not, initialize it
+        if (!window.radarMapInstance) {
+            initRadarMap();
+            window.radarMapInitialized = true;
+        }
+
+        const map = window.radarMapInstance;
+
+        // Clear layers safely
+        try { if (stormLayers) stormLayers.clearLayers(); } catch {}
+
+        // Cancel any in-flight load and refresh cleanly
+        try { loadStormsAbort?.abort(); } catch {}
+        map.setView([27.5, -82], 6);
+        loadStorms(false);
+
+        // UI cleanup
+        setTimeout(() => map.invalidateSize(), 150);
+        const inp = document.getElementById('radar-search-input');
+        if (inp) inp.value = '';
+        const msg = document.getElementById('radar-no-results');
+        if (msg) msg.style.display = 'none';
+        }
+
+        window.resetRadarMap = resetRadarMap;
+
+  </script>
+</body>
+</html>

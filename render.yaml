@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: hurricane-resource
+    env: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: gunicorn hurricane_project.wsgi
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: STORM_DATA_DIR
+        value: "/data/storms"
+    disk:
+      name: storm-data
+      mountPath: /data
+      sizeGB: 1
+
+  - type: cron
+    name: storm-fetch
+    env: python
+    schedule: "*/30 * * * *"
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+    startCommand: python download_storms.py
+    envVars:
+      - key: STORM_DATA_DIR
+        value: "/data/storms"
+    disk:
+      name: storm-data
+      mountPath: /data
+      sizeGB: 1

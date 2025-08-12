@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "ep082025_track_034",
+"features": [
+{ "type": "Feature", "properties": { "STORMNAME": "Henriette", "STORMTYPE": "TS", "ADVDATE": "500 AM HST Tue Aug 12 2025", "ADVISNUM": "34", "STORMNUM": 8.0, "FCSTPRD": 120.0, "BASIN": "EP" }, "geometry": { "type": "LineString", "coordinates": [ [ -161.6, 32.8 ], [ -163.5, 34.3 ], [ -166.0, 36.2 ], [ -168.2, 38.3 ], [ -169.7, 40.7 ], [ -169.7, 42.7 ] ] } }
+]
+}
