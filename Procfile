@@ -1,1 +1,1 @@
-web: gunicorn hurricane_project.wsgi
+web: gunicorn hurricane_project.wsgi:application --workers 2 --threads 4 --timeout 120

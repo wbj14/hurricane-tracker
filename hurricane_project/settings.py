@@ -8,33 +8,38 @@ import os
 # --- Paths ---
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --- Core security / env flags ---
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")  # set in Render
-DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
+# --- Core security / env flags (Render-friendly) ---
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret-unsafe")
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
 
-# Comma-separated in env, e.g. "yourapp.onrender.com,localhost,127.0.0.1"
+# Allowed hosts (comma-separated env supported)
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
-    "ALLOWED_HOSTS", "localhost,127.0.0.1"
+    "ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com"
 ).split(",") if h.strip()]
 
-# Render (and other proxies) send this so Django knows requests are HTTPS
+# Tell Django requests are HTTPS when behind Render's proxy
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# Lock down cookies & HTTPS in prod
-if not DEBUG:
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True
-
-# Trust Render subdomains for CSRF by default; you can override via env
+# CSRF (trust Render; allow overrides via env)
 CSRF_TRUSTED_ORIGINS = [
     *[o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()],
     "https://*.onrender.com",
 ]
 
+# Extra hardening in production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Lax"
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 60  # 60 days
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 # --- Installed apps ---
 INSTALLED_APPS = [
-    "whitenoise.runserver_nostatic",  # let WhiteNoise handle static even with runserver
+    "whitenoise.runserver_nostatic",  # let WhiteNoise handle static in dev, too
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -62,7 +67,7 @@ ROOT_URLCONF = "hurricane_project.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],  # optional; safe if you don't have this folder
+        "DIRS": [BASE_DIR / "templates"],  # safe even if folder doesn't exist
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -76,7 +81,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "hurricane_project.wsgi.application"
 
-# --- Database (SQLite for now) ---
+# --- Database (SQLite, rebuilt from CSV at boot) ---
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -94,16 +99,18 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # --- i18n / tz ---
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "America/New_York"  # adjust if you prefer UTC
 USE_I18N = True
 USE_TZ = True
 
 # --- Static files (WhiteNoise) ---
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"               # collectstatic target
-STATICFILES_DIRS = [BASE_DIR / "tracker" / "static"] # your app's static assets
+STATIC_ROOT = BASE_DIR / "staticfiles"  # collectstatic target
 
-# hashed, compressed static files for production
+# Only include app static dir if it exists (prevents errors)
+STATICFILES_DIRS = [p for p in [BASE_DIR / "tracker" / "static"] if p.exists()]
+
+# Django 5 storage-style config for WhiteNoise
 STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
